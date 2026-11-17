@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="300" viewBox="0 0 640 300">
+  <defs>
+    <clipPath id="cardClip">
+      <rect x="40" y="40" width="560" height="220" rx="14"/>
+    </clipPath>
+  </defs>
+
+  <!-- 面板外框 -->
+  <rect x="40" y="40" width="560" height="220" rx="14" fill="#ffffff" stroke="#d7dbe3" stroke-width="1.5"/>
+
+  <g clip-path="url(#cardClip)">
+    <!-- 顶部搜索栏 -->
+    <rect x="40" y="40" width="560" height="52" fill="#f6f7f9"/>
+    <line x1="40" y1="92" x2="600" y2="92" stroke="#e3e6ec" stroke-width="1.5"/>
+
+    <rect x="58" y="56" width="266" height="24" rx="7" fill="#ffffff" stroke="#c9ced8" stroke-width="1.5"/>
+    <circle cx="76" cy="68" r="5.2" fill="none" stroke="#7c8698" stroke-width="1.8"/>
+    <line x1="80" y1="72" x2="84.5" y2="76.5" stroke="#7c8698" stroke-width="1.8" stroke-linecap="round"/>
+    <rect x="92" y="64" width="120" height="7" rx="3.5" fill="#9aa3b2"/>
+
+    <rect x="336" y="56" width="52" height="24" rx="7" fill="#2f6fdd"/>
+    <rect x="348" y="65" width="28" height="6" rx="3" fill="#ffffff"/>
+
+    <!-- 配额提示 -->
+    <circle cx="452" cy="68" r="4" fill="#3fa45b"/>
+    <rect x="464" y="64" width="56" height="7" rx="3.5" fill="#b3bac6"/>
+
+    <!-- 筛选行 -->
+    <g fill="#e9ecf1">
+      <rect x="58" y="102" width="66" height="19" rx="9.5"/>
+      <rect x="132" y="102" width="60" height="19" rx="9.5"/>
+      <rect x="200" y="102" width="56" height="19" rx="9.5"/>
+      <rect x="264" y="102" width="66" height="19" rx="9.5"/>
+    </g>
+    <rect x="58" y="102" width="66" height="19" rx="9.5" fill="#e3ecfc" stroke="#2f6fdd" stroke-width="1.3"/>
+    <g fill="#7c8698">
+      <rect x="70" y="109" width="42" height="5" rx="2.5"/>
+      <rect x="144" y="109" width="36" height="5" rx="2.5"/>
+      <rect x="212" y="109" width="32" height="5" rx="2.5"/>
+      <rect x="276" y="109" width="42" height="5" rx="2.5"/>
+    </g>
+    <rect x="504" y="102" width="76" height="19" rx="6" fill="#ffffff" stroke="#d7dbe3" stroke-width="1.3"/>
+
+    <!-- 结果卡片 1（展开态，带 README） -->
+    <rect x="58" y="134" width="524" height="96" rx="10" fill="#ffffff" stroke="#2f6fdd" stroke-width="1.5"/>
+    <circle cx="80" cy="152" r="9" fill="#eceff4"/>
+    <rect x="96" y="148" width="150" height="8" rx="4" fill="#2f6fdd"/>
+    <rect x="252" y="148" width="60" height="8" rx="4" fill="#c3cad6"/>
+    <g fill="#8d96a6">
+      <rect x="76" y="166" width="120" height="6" rx="3"/>
+      <rect x="202" y="166" width="88" height="6" rx="3"/>
+    </g>
+    <g>
+      <circle cx="78" cy="186" r="3" fill="#e0a33c"/>
+      <rect x="86" y="183" width="30" height="6" rx="3" fill="#b3bac6"/>
+      <circle cx="132" cy="186" r="2.6" fill="#8d96a6"/>
+      <rect x="140" y="183" width="22" height="6" rx="3" fill="#b3bac6"/>
+      <circle cx="178" cy="186" r="3" fill="#2f6fdd"/>
+      <rect x="186" y="183" width="46" height="6" rx="3" fill="#b3bac6"/>
+    </g>
+    <rect x="76" y="200" width="490" height="22" rx="6" fill="#f2f4f7"/>
+    <g fill="#9aa3b2">
+      <rect x="86" y="207" width="150" height="4.5" rx="2.2"/>
+      <rect x="86" y="215" width="230" height="4.5" rx="2.2"/>
+    </g>
+
+    <!-- 结果卡片 2 -->
+    <rect x="58" y="238" width="524" height="62" rx="10" fill="#fbfcfd" stroke="#e3e6ec" stroke-width="1.5"/>
+    <circle cx="80" cy="256" r="9" fill="#eceff4"/>
+    <rect x="96" y="252" width="128" height="8" rx="4" fill="#7c8698"/>
+    <rect x="232" y="252" width="52" height="8" rx="4" fill="#c3cad6"/>
+    <g fill="#a6aebb">
+      <rect x="76" y="270" width="180" height="6" rx="3"/>
+      <rect x="76" y="284" width="64" height="6" rx="3"/>
+    </g>
+  </g>
+
+  <!-- 放大镜标识，压在框外右上，表明这是「搜索」 -->
+  <circle cx="566" cy="44" r="30" fill="#ffffff"/>
+  <circle cx="560" cy="38" r="14" fill="none" stroke="#2f6fdd" stroke-width="5"/>
+  <line x1="570" y1="48" x2="581" y2="59" stroke="#2f6fdd" stroke-width="5.5" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,10 @@
+# dsh-github-search bundle patch
+#
+# 一个包同时提供两半：
+#   index.js  —— Host 半片：代理 api.github.com（绕开浏览器 CORS 并统一处理限流），
+#                提供 /dsh-github-search/search、/repo、/status 三个只读接口，
+#                同时把同样的两个操作注册成 agent 工具 github_search / github_repo。
+#   client.js —— 浏览器半片：在左栏加一个入口图标，主面板是项目搜索页。
+- insert:
+    - id: dsh-github-search
+      name: 'dsh-github-search'

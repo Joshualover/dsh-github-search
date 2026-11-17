@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "GitHub 项目搜索",
+    "description": "在 DeepSeek Harness 里直接搜索 GitHub 项目并以列表形式查看，不用打开 github.com。左栏会多一个 GitHub 搜索入口：输入关键词就能拿到仓库的星标数、语言、最近更新时间和简介；可以按语言、最低星标数筛选，可以只搜仓库名，也可以按最佳匹配、星标最多、fork 最多、最近更新排序。展开任意一条即可读 README、看语言构成、在浏览器里打开，或复制 clone 命令与仓库地址。同时提供两个只读的 agent 工具：github_search 找仓库，github_repo 读单个仓库的详情和 README。\n\n请求经由本机 Harness 的 Host 转发到 api.github.com，因此限流状态与 token 都留在服务端。配置 token 能把搜索配额从每分钟 10 次提到 30 次：插件先用自己的配置项 config.token，其次读本机 gh CLI 的登录凭据，最后读环境变量 GITHUB_TOKEN 或 GH_TOKEN；把 config.useGhToken 设为 false 可以不用 gh CLI 的凭据。面板右上角显示剩余配额。请求只发送你输入的搜索词和筛选条件，全部是只读操作，插件不往磁盘写任何东西。关掉插件会同时移除面板、左栏入口和这两个工具。",
+    "detail": "docs/DETAIL.zh.md"
+  }
+}

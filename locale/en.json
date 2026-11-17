@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "GitHub project search",
+    "description": "Search GitHub projects from inside DeepSeek Harness and read the results as a list, without opening github.com. The left sidebar gains a GitHub search entry: type a keyword to get repositories with stars, language, last update and description; filter by language, minimum stars, repository name only, and sort by best match, stars, forks or recently updated. Expand any result to read its README, see the language breakdown, open it in a browser, or copy the clone command or repository URL. Also adds two read-only agent tools: github_search finds repositories and github_repo reads one repository's details and README.\n\nRequests go to api.github.com through the local Harness Host, which keeps the request rate limit and any token on the server side. A token raises the limit from 10 searches per minute to 30: the plugin uses the token in its own configuration first (config.token), then the token of a local gh CLI login, then GITHUB_TOKEN or GH_TOKEN from the environment; set config.useGhToken to false to skip the gh CLI. Quota left is shown at the top right of the panel. Requests send only the keywords and filters you type, are read-only, and the plugin stores nothing on disk. Turning the plugin off removes the panel, its sidebar entry and both tools.",
+    "detail": "docs/DETAIL.md"
+  }
+}
