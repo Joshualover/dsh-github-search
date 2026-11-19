@@ -43,6 +43,11 @@ window.__ModuleLoader__.load({
     const MAX_PAGE = 10
     const PAGE_SIZE = 20
 
+    /** 搜索历史：存 10 条，界面上最多铺开 8 条。 */
+    const HISTORY_KEY = 'dsh-github-search:history'
+    const HISTORY_MAX = 10
+    const HISTORY_SHOWN = 8
+
     /* ------------------------------------------------------------ 样式 */
 
     // 只用 --dsw-alias-* 主题 token，深浅色跟随宿主；不出现字面色值。
@@ -138,6 +143,61 @@ window.__ModuleLoader__.load({
 }
 [data-github-search] .ghs-btn.is-primary:hover { background: var(--dsw-alias-button-primary-hover); }
 
+[data-github-search] .ghs-history {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-height: 24px;
+}
+[data-github-search] .ghs-history-label {
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+  flex: none;
+  margin-right: 2px;
+}
+[data-github-search] .ghs-history-chip {
+  max-width: 200px;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 6px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-github-search] .ghs-history-chip:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  border-color: var(--dsw-alias-border-l2);
+  color: var(--dsw-alias-label-primary);
+}
+[data-github-search] .ghs-history-more {
+  font-size: 11.5px;
+  color: var(--dsw-alias-label-tertiary);
+  flex: none;
+}
+[data-github-search] .ghs-history-clear {
+  margin-left: auto;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+  flex: none;
+}
+[data-github-search] .ghs-history-clear:hover {
+  color: var(--dsw-alias-state-error-primary);
+  border-color: var(--dsw-alias-border-l1);
+}
 [data-github-search] .ghs-filters {
   display: flex;
   align-items: center;
@@ -334,6 +394,8 @@ window.__ModuleLoader__.load({
 [data-github-search] .ghs-chip:focus-visible,
 [data-github-search] .ghs-small:focus-visible,
 [data-github-search] .ghs-select:focus-visible,
+[data-github-search] .ghs-history-chip:focus-visible,
+[data-github-search] .ghs-history-clear:focus-visible,
 [data-github-search] .ghs-card-head:focus-visible,
 [data-github-search] .ghs-readme:focus-visible {
   outline: 2px solid var(--dsw-alias-brand-primary);
@@ -388,6 +450,10 @@ window.__ModuleLoader__.load({
         copiedClone: '已复制 clone 命令',
         copiedUrl: '已复制仓库地址',
         copyFailed: '复制失败，可直接选中：',
+        historyLabel: '最近搜索',
+        historyClear: '清空历史',
+        historyClearHint: '清空全部搜索历史',
+        historyMore: (n) => `还有 ${n} 条`,
         readingReadme: '正在读取 README…',
         retry: '重试',
         noReadme: '（这个仓库没有 README）',
@@ -443,6 +509,10 @@ window.__ModuleLoader__.load({
         copiedClone: 'Clone command copied',
         copiedUrl: 'Repository URL copied',
         copyFailed: 'Copy failed, select it here: ',
+        historyLabel: 'Recent',
+        historyClear: 'Clear history',
+        historyClearHint: 'Clear all search history',
+        historyMore: (n) => `+${n} more`,
         readingReadme: 'Reading README…',
         retry: 'Retry',
         noReadme: '(this repository has no README)',
@@ -496,6 +566,52 @@ window.__ModuleLoader__.load({
       if (days < 30) return `${days}${t('updatedDaysAgo')}`
       if (days < 365) return `${Math.floor(days / 30)}${t('updatedMonthsAgo')}`
       return `${Math.floor(days / 365)}${t('updatedYearsAgo')}`
+    }
+
+    /* ------------------------------------------------------------ 搜索历史 */
+
+    /**
+     * 读写 localStorage 里的搜索历史。
+     *
+     * 全部包在 try 里：隐私模式、禁用存储、配额满都会抛，而这些场景下
+     * 历史功能失效是可接受的降级，不该让整个面板崩掉。
+     */
+    function readHistory() {
+      try {
+        const raw = window.localStorage.getItem(HISTORY_KEY)
+        if (!raw) return []
+        const parsed = JSON.parse(raw)
+        if (!Array.isArray(parsed)) return []
+        // 存进来的可能是旧版本或手改过的数据，逐项过一遍才敢用。
+        return parsed
+          .filter((one) => typeof one === 'string')
+          .map((one) => one.trim())
+          .filter(Boolean)
+          .slice(0, HISTORY_MAX)
+      } catch {
+        return []
+      }
+    }
+
+    function writeHistory(list) {
+      try {
+        window.localStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(0, HISTORY_MAX)))
+        return true
+      } catch {
+        // 写不进去就算了，内存里的 state 仍然可用。
+        return false
+      }
+    }
+
+    /**
+     * 把一条查询并进历史：已存在就提到最前，超出 10 条丢最旧的。
+     * 大小写不敏感去重 —— 搜 "Rust" 和 "rust" 不该占两条。
+     */
+    function mergeHistory(list, keyword) {
+      const text = String(keyword ?? '').trim()
+      if (!text) return list
+      const key = text.toLowerCase()
+      return [text, ...list.filter((one) => one.toLowerCase() !== key)].slice(0, HISTORY_MAX)
     }
 
     async function api(path, init) {
@@ -680,6 +796,7 @@ window.__ModuleLoader__.load({
       const [searched, setSearched] = react.useState(false)
 
       const [status, setStatus] = react.useState(null)
+      const [history, setHistory] = react.useState([])
       const [openName, setOpenName] = react.useState(null)
       const [detail, setDetail] = react.useState({})
       const [toast, setToast] = react.useState(null)
@@ -706,6 +823,11 @@ window.__ModuleLoader__.load({
       }, [])
 
       react.useEffect(() => { inputRef.current?.focus() }, [])
+
+      // 历史只在挂载时读一次；之后写都走 remember()，避免每帧读 localStorage。
+      react.useEffect(() => {
+        setHistory(readHistory())
+      }, [])
 
       /**
        * 发一次搜索。overrides 用于「刚改了筛选项、状态还没提交」的场景，
@@ -770,13 +892,49 @@ window.__ModuleLoader__.load({
         }
       }, [sort, language, minStars, inName])
 
+      /** 把一次成功发起的查询记进历史（内存与 localStorage 同步更新）。 */
+      const remember = react.useCallback((keyword) => {
+        setHistory((prev) => {
+          const next = mergeHistory(prev, keyword)
+          writeHistory(next)
+          return next
+        })
+      }, [])
+
+      /** 清空全部历史。只清历史，不动当前搜索结果 —— 那是「清空」按钮的事。 */
+      const clearHistory = react.useCallback(() => {
+        setHistory([])
+        try {
+          window.localStorage.removeItem(HISTORY_KEY)
+        } catch {
+          /* 存储不可用时内存里已经清空，功能上够用。 */
+        }
+      }, [])
+
       const submit = react.useCallback((event) => {
         event?.preventDefault?.()
         const keyword = draft.trim()
+        if (!keyword) return
         setQuery(keyword)
         setOpenName(null)
+        remember(keyword)
         void runSearch(keyword, 1)
-      }, [draft, runSearch])
+      }, [draft, runSearch, remember])
+
+      /**
+       * 点历史标签：填入输入框并立刻重搜。
+       * 复用 submit 的语义（同一套记住/清空/重搜逻辑），但不依赖表单事件。
+       */
+      const reuseKeyword = react.useCallback((keyword) => {
+        const text = String(keyword ?? '').trim()
+        if (!text) return
+        setDraft(text)
+        setQuery(text)
+        setOpenName(null)
+        remember(text)
+        void runSearch(text, 1)
+        inputRef.current?.focus()
+      }, [remember, runSearch])
 
       /**
        * 回到初始状态：清空关键词、结果、详情缓存与筛选条件。
@@ -897,6 +1055,31 @@ window.__ModuleLoader__.load({
               title: t('clearHint'),
             }, t('clear')),
           ]),
+          // 历史标签行：最多铺开 8 条，点一下填入并重搜。
+          history.length > 0
+            ? h('div', { key: 'history', className: 'ghs-history', 'aria-label': t('historyLabel') }, [
+                h('span', { key: 'label', className: 'ghs-history-label' }, t('historyLabel')),
+                ...history.slice(0, HISTORY_SHOWN).map((one) => h('button', {
+                  key: one,
+                  type: 'button',
+                  className: 'ghs-history-chip',
+                  title: one,
+                  onClick: () => reuseKeyword(one),
+                }, one)),
+                // 超过 8 条时提示还有多少，不然用户不知道有 10 条。
+                history.length > HISTORY_SHOWN
+                  ? h('span', { key: 'more', className: 'ghs-history-more' },
+                      t('historyMore', history.length - HISTORY_SHOWN))
+                  : null,
+                h('button', {
+                  key: 'clear',
+                  type: 'button',
+                  className: 'ghs-history-clear',
+                  onClick: clearHistory,
+                  title: t('historyClearHint'),
+                }, t('historyClear')),
+              ])
+            : null,
           h('div', { key: 'filters', className: 'ghs-filters' }, [
             ...SORTS.map((one) => h('button', {
               key: one.id,
@@ -967,12 +1150,7 @@ window.__ModuleLoader__.load({
                     key: example,
                     type: 'button',
                     className: 'ghs-chip',
-                    onClick: () => {
-                      setDraft(example)
-                      setQuery(example)
-                      setOpenName(null)
-                      void runSearch(example, 1, {})
-                    },
+                    onClick: () => reuseKeyword(example),
                   }, example))),
               ])
             : null,
