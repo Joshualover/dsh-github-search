@@ -347,6 +347,16 @@ window.__ModuleLoader__.load({
 }
 [data-github-search] .ghs-small:hover { background: var(--dsw-alias-interactive-bg-hover); }
 [data-github-search] a.ghs-small { text-decoration: none; }
+[data-github-search] .ghs-small.is-on {
+  border-color: var(--dsw-alias-brand-primary);
+  color: var(--dsw-alias-brand-primary);
+  background: var(--dsw-alias-button-ghost-active-fill);
+}
+[data-github-search] .ghs-small:disabled { opacity: 0.55; cursor: default; }
+[data-github-search] .ghs-translate-note {
+  font-size: 11.5px;
+  color: var(--dsw-alias-label-tertiary);
+}
 [data-github-search] .ghs-langs { display: flex; flex-direction: column; gap: 6px; }
 [data-github-search] .ghs-lang-row { display: flex; align-items: center; gap: 10px; font-size: 12.5px; }
 [data-github-search] .ghs-lang-name { width: 104px; flex: none; color: var(--dsw-alias-label-secondary); }
@@ -454,6 +464,11 @@ window.__ModuleLoader__.load({
         historyClear: '清空历史',
         historyClearHint: '清空全部搜索历史',
         historyMore: (n) => `还有 ${n} 条`,
+        translateReadme: '翻译成中文',
+        translating: '翻译中…',
+        showOriginal: '看原文',
+        translateTruncated: 'README 较长，只翻译了前 8000 字符',
+        translatedLabel: 'README 译文',
         readingReadme: '正在读取 README…',
         retry: '重试',
         noReadme: '（这个仓库没有 README）',
@@ -513,6 +528,11 @@ window.__ModuleLoader__.load({
         historyClear: 'Clear history',
         historyClearHint: 'Clear all search history',
         historyMore: (n) => `+${n} more`,
+        translateReadme: 'Translate to Chinese',
+        translating: 'Translating…',
+        showOriginal: 'Show original',
+        translateTruncated: 'This README is long, so only the first 8000 characters were translated',
+        translatedLabel: 'Translated README',
         readingReadme: 'Reading README…',
         retry: 'Retry',
         noReadme: '(this repository has no README)',
@@ -686,7 +706,7 @@ window.__ModuleLoader__.load({
      * 外层不带 role="button"：里面还有链接和按钮，交互元素不能嵌套交互元素。
      * 折叠/展开由卡片头部的真实 <button> 负责，带 aria-expanded。
      */
-    function RepoCard({ item, open, state, onToggle, onCopy }) {
+    function RepoCard({ item, open, state, onToggle, onCopy, onTranslate, translate }) {
       return h('div', { className: `ghs-card ${open ? 'is-open' : ''}` }, [
         h('button', {
           key: 'head',
@@ -724,11 +744,18 @@ window.__ModuleLoader__.load({
           ? h('div', { key: 't', className: 'ghs-topics' }, item.topics.slice(0, 8).map((topic) =>
               h('span', { key: topic, className: 'ghs-topic' }, topic)))
           : null,
-        open ? h('div', { key: 'detail', className: 'ghs-detail' }, renderDetail({ item, state, onRetry: () => onToggle(item, { force: true }), onCopy })) : null,
+        open ? h('div', { key: 'detail', className: 'ghs-detail' }, renderDetail({
+          item,
+          state,
+          onRetry: () => onToggle(item, { force: true }),
+          onCopy,
+          onTranslate,
+          translate,
+        })) : null,
       ])
     }
 
-    function renderDetail({ state, onRetry, onCopy }) {
+    function renderDetail({ state, onRetry, onCopy, onTranslate, translate }) {
       if (!state || state.loading) {
         return [h('div', { key: 'l', className: 'ghs-shimmer' }, t('readingReadme'))]
       }
@@ -754,6 +781,18 @@ window.__ModuleLoader__.load({
             key: 'url', type: 'button', className: 'ghs-small',
             onClick: () => onCopy(repo.url, t('copiedUrl')),
           }, t('copyUrl')),
+          // 翻译只在有 README 时出现；已经翻过就切成「看原文」。
+          String(repo.readme ?? '').trim()
+            ? h('button', {
+                key: 'translate',
+                type: 'button',
+                className: `ghs-small ${translate?.text ? 'is-on' : ''}`,
+                disabled: translate?.loading === true,
+                onClick: () => onTranslate(),
+              }, translate?.loading
+                ? t('translating')
+                : translate?.text ? t('showOriginal') : t('translateReadme'))
+            : null,
         ]),
         languages.length
           ? h('div', { key: 'langs', className: 'ghs-langs' }, languages.map((one) =>
@@ -769,13 +808,19 @@ window.__ModuleLoader__.load({
           h('span', { key: 'branch', className: 'ghs-stat' }, `${t('defaultBranch')}${repo.defaultBranch ?? '-'}`),
           h('span', { key: 'created', className: 'ghs-stat' }, `${t('createdAt')}${String(repo.createdAt ?? '').slice(0, 10) || '-'}`),
         ]),
+        translate?.error
+          ? h('div', { key: 'transErr', className: 'ghs-error' }, translate.error)
+          : null,
+        translate?.truncated && translate?.text
+          ? h('div', { key: 'transNote', className: 'ghs-translate-note' }, t('translateTruncated'))
+          : null,
         h('div', {
           key: 'readme',
           className: 'ghs-readme',
           tabIndex: 0,
           role: 'region',
-          'aria-label': 'README',
-        }, repo.readme || t('noReadme')),
+          'aria-label': translate?.text ? t('translatedLabel') : 'README',
+        }, (translate?.text || repo.readme) || t('noReadme')),
       ]
     }
 
@@ -799,6 +844,8 @@ window.__ModuleLoader__.load({
       const [history, setHistory] = react.useState([])
       const [openName, setOpenName] = react.useState(null)
       const [detail, setDetail] = react.useState({})
+      // 翻译结果按仓库名缓存：{ [fullName]: { loading?, text?, truncated?, error? } }
+      const [translated, setTranslated] = react.useState({})
       const [toast, setToast] = react.useState(null)
 
       const requestId = react.useRef(0)
@@ -959,6 +1006,7 @@ window.__ModuleLoader__.load({
         setSearched(false)
         setOpenName(null)
         setDetail({})
+        setTranslated({})
         inputRef.current?.focus()
       }, [])
 
@@ -1001,6 +1049,47 @@ window.__ModuleLoader__.load({
 
       // 配额展示是三态的：未知 / 偏低 / 正常。绿点在用户认知里等于「健康」，
       // 所以只有真的拿到数字且不低时才给绿色。
+      /**
+       * 翻译当前展开项的 README；已翻过的再点一次就切回原文。
+       *
+       * 翻译走 Host 的 /translate，由它调 Harness 的 translator 服务 —— 浏览器
+       * 直连翻译接口既拿不到凭据，也绕不过跨域。
+       */
+      const toggleTranslate = react.useCallback(async (item) => {
+        const name = item.fullName
+        const current = translated[name]
+        if (current?.text) {
+          // 再点一次：清掉译文，回到原文。
+          setTranslated((prev) => {
+            const next = { ...prev }
+            delete next[name]
+            return next
+          })
+          return
+        }
+        const source = detail[name]?.data?.readme
+        if (typeof source !== 'string' || !source.trim()) return
+        if (current?.loading) return
+
+        const ticket = requestId.current
+        setTranslated((prev) => ({ ...prev, [name]: { loading: true } }))
+        try {
+          const body = await api('/translate', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ text: source, target: 'zh-CN' }),
+          })
+          if (ticket !== requestId.current) return
+          setTranslated((prev) => ({
+            ...prev,
+            [name]: { text: String(body?.text ?? ''), truncated: body?.truncated === true },
+          }))
+        } catch (err) {
+          if (ticket !== requestId.current) return
+          setTranslated((prev) => ({ ...prev, [name]: { error: String(err?.message ?? err) } }))
+        }
+      }, [translated, detail])
+
       const quota = status?.rate ?? {}
       const hasQuota = typeof quota.remaining === 'number' && typeof quota.limit === 'number' && quota.limit > 0
       const quotaLow = hasQuota && quota.remaining <= Math.max(2, Math.floor(quota.limit * 0.2))
@@ -1183,6 +1272,8 @@ window.__ModuleLoader__.load({
                   state: detail[item.fullName],
                   onToggle: openDetail,
                   onCopy: copyAndToast,
+                  onTranslate: () => { void toggleTranslate(item) },
+                  translate: translated[item.fullName],
                 })))
             : null,
 

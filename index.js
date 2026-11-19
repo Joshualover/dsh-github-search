@@ -62,6 +62,122 @@ async function resolveToken(config) {
   return { source: 'none' }
 }
 
+/* ------------------------------------------------------------------ 翻译 */
+
+/** README 常常上万字符，翻译前先截断，避免把整篇都喂给模型。 */
+const TRANSLATE_CHAR_LIMIT = 8000
+
+const TRANSLATE_SYSTEM_PROMPT = [
+  'You translate README documents into the target language.',
+  'Preserve the Markdown structure exactly: headings, lists, tables, code fences, links, badges and HTML.',
+  'Translate prose and comments; keep code, commands, identifiers, URLs, file paths and product names unchanged.',
+  'Output only the translated Markdown, with no preface, notes or explanation.',
+].join(' ')
+
+/**
+ * 把 README 翻成目标语言。
+ *
+ * 两条通道，按可靠性排序：
+ *   1. Harness 的 translator 服务（部分 profile 不挂载）
+ *   2. ctx.llm —— 直接调用户已配置的模型，凭据现成，且本 profile 一定有
+ *
+ * 两条都不可用时明确报错，而不是假装翻译成功。
+ * @returns {Promise<{ text: string, truncated: boolean, via: string }>}
+ */
+async function translateReadme(ctx, input, signal) {
+  const text = typeof input?.text === 'string' ? input.text : ''
+  const target = typeof input?.target === 'string' && input.target ? input.target : 'zh-CN'
+  if (!text.trim()) throw Object.assign(new Error('没有可翻译的 README'), { status: 400, code: 'empty-text' })
+
+  // 太长就截断，并把截断事实回报给界面 —— 不声不响只翻一半会误导用户。
+  const truncated = text.length > TRANSLATE_CHAR_LIMIT
+  const body = truncated ? text.slice(0, TRANSLATE_CHAR_LIMIT) : text
+
+  const translator = ctx.get('translator')
+  if (typeof translator?.resolve === 'function' && typeof translator.translate === 'function') {
+    try {
+      const spec = translator.resolve({ text: body, targetLanguage: target })
+      const out = await translator.translate(spec, signal)
+      const result = typeof out === 'string' ? out : String(out ?? '')
+      if (result.trim()) return { text: result, truncated, via: `translator:${spec?.provider ?? 'unknown'}` }
+    } catch {
+      // translator 失败就安静退到 llm，不把两条通道的错都抛给用户。
+    }
+  }
+
+  const result = await translateViaLlm(ctx, body, target, signal)
+  return { text: result.text, truncated, via: `llm:${result.provider}/${result.model}` }
+}
+
+/** 用 ctx.llm 调当前配置的模型翻译。这是本 profile 一定可用的通道。 */
+async function translateViaLlm(ctx, body, target, signal) {
+  const llm = ctx.get('llm')
+  if (typeof llm?.stream !== 'function') {
+    throw Object.assign(
+      new Error('这个 DSH 没有可用的翻译通道（既没有翻译服务，也没有模型路由）'),
+      { status: 501, code: 'translate-unavailable' },
+    )
+  }
+
+  const selection = await resolveModelSelection(ctx)
+  if (!selection) {
+    throw Object.assign(
+      new Error('没有已配置的模型可以用来翻译'),
+      { status: 501, code: 'no-model' },
+    )
+  }
+
+  const chunks = llm.stream({
+    provider: selection.provider,
+    model: selection.model,
+    messages: [{ role: 'user', content: [{ type: 'text', text: body }] }],
+    system: `${TRANSLATE_SYSTEM_PROMPT} Target language: ${target}.`,
+    temperature: 0.2,
+    signal,
+  })
+
+  let out = ''
+  for await (const chunk of chunks) {
+    if (chunk?.type === 'text-delta' && typeof chunk.text === 'string') out += chunk.text
+    else if (chunk?.type === 'finish' && chunk.reason?.kind === 'error') {
+      throw Object.assign(
+        new Error(chunk.reason.failure?.message || '模型翻译失败'),
+        { status: 502, code: 'translate-failed' },
+      )
+    }
+  }
+  if (!out.trim()) {
+    throw Object.assign(new Error('模型没有返回译文'), { status: 502, code: 'empty-result' })
+  }
+  return { text: out, provider: selection.provider, model: selection.model }
+}
+
+/**
+ * 取一个可用于翻译的模型路由。
+ *
+ * 优先用 agentDefaultModel 的当前选择（用户正在用的那个）。拿不到时退回到
+ * 任一已注册 provider，并向它要一个具体模型 —— 空 model 传进 stream 会失败，
+ * 所以这一步必须问出真名字。
+ */
+async function resolveModelSelection(ctx) {
+  const pick = ctx.get('agentDefaultModel')?.currentSelection?.()
+  if (pick?.provider && pick?.model) return { provider: pick.provider, model: pick.model }
+
+  const llm = ctx.get('llm')
+  const providers = llm?.listProviders?.() ?? []
+  for (const provider of providers) {
+    if (!provider?.id) continue
+    try {
+      const models = await llm.listModels(provider.id)
+      const first = models?.find((one) => one?.id)
+      if (first) return { provider: provider.id, model: first.id }
+    } catch {
+      // 这个 provider 列不出模型就试下一个。
+    }
+  }
+  return undefined
+}
+
 /* ------------------------------------------------------------------ HTTP */
 
 function json(res, status, body) {
@@ -153,6 +269,13 @@ async function route(ctx, config, req, res) {
           includeArchived: params.get('includeArchived') === '1',
         }
     json(res, 200, await runOperation(config, 'search', input, signal))
+    return
+  }
+
+  if (path === '/translate' && req.method === 'POST') {
+    const input = await readJson(req, 256 * 1024)
+    // 翻译可能比搜索慢，给更长的时限。
+    json(res, 200, await translateReadme(ctx, input, AbortSignal.timeout(60_000)))
     return
   }
 
@@ -311,6 +434,52 @@ function registerTools(ctx, config) {
   )
 }
 
+/* ------------------------------------------------------------------ 翻译工具 */
+
+function renderTranslation(result) {
+  const head = result.truncated
+    ? '（README 较长，只翻了前 8000 字符）'
+    : ''
+  return [head, result.text].filter(Boolean).join('\n')
+}
+
+function registerTranslateTool(ctx, config) {
+  const tools = ctx.get('tools')
+  if (typeof tools?.register !== 'function') return
+
+  ctx.effect(
+    () =>
+      tools.register({
+        name: 'github_translate_readme',
+        description:
+          'Translate one GitHub repository README into another language (Chinese by default) and return the translated plain text. Use it when a repository has only an English README and the user asks what it says. Pass repo to fetch and translate that repository\'s README, or text to translate README content you already have. Read-only; the translation service may be unavailable in some profiles, which the tool reports explicitly.',
+        parameters: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            repo: { type: 'string', description: 'Repository as owner/repo or a github.com URL; its README is fetched first.' },
+            text: { type: 'string', description: 'README text to translate directly, when it was already fetched.' },
+            target: { type: 'string', description: 'Target language tag, e.g. zh-CN (default) or English.' },
+          },
+        },
+        output: TEXT_OUTPUT,
+        isConcurrencySafe: () => true,
+        async execute(args) {
+          const signal = AbortSignal.timeout(60_000)
+          let source = typeof args.text === 'string' ? args.text : ''
+          if (!source.trim()) {
+            const repo = await runOperation(config, 'repo', { repo: args.repo }, signal)
+            source = typeof repo.readme === 'string' ? repo.readme : ''
+          }
+          if (!source.trim()) return { text: '这个仓库没有 README，无法翻译。' }
+          const out = await translateReadme(ctx, { text: source, target: args.target }, signal)
+          return { text: renderTranslation(out) }
+        },
+      }),
+    `${PLUGIN}: github_translate_readme`,
+  )
+}
+
 /* ------------------------------------------------------------------ 入口 */
 
 export function apply(ctx, config = {}) {
@@ -340,4 +509,5 @@ export function apply(ctx, config = {}) {
   )
 
   registerTools(ctx, config)
+  registerTranslateTool(ctx, config)
 }
