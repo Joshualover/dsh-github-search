@@ -43,6 +43,15 @@ GitHub 搜索接口对未认证请求的限制很紧：**每个 IP 每分钟只�
 - `github_repo` —— 读单个仓库的详情、语言构成与 README，接受 `owner/repo` 或 github.com 链接。
 - `github_translate_readme` —— 把某个仓库的 README（或已取得的 README 文本）译成中文，保留 Markdown 结构。
 
+## 截图
+
+`assets/` 下是真实界面截图，由仓库根的 `screenshots.json` 声明，插件市场详情页按此顺序展示：
+
+1. `assets/screenshot-2-results.webp` —— 搜索结果列表
+2. `assets/screenshot-1-empty.webp` —— 初始空状态与最近搜索
+
+换图只需替换文件或改 `screenshots.json`，不需要提 PR 到列表仓库。
+
 ## 数据与隐私
 
 - 请求只包含你输入的搜索词与筛选条件，经本机 Host 转发到 `api.github.com`。

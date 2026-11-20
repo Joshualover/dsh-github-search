@@ -22,7 +22,8 @@
     "docs",
     "icon.svg",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "screenshots.json"
   ],
   "dsh": {
     "bundle": {
@@ -47,5 +48,13 @@
     "github",
     "search"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Joshualover/dsh-github-search.git"
+  },
+  "homepage": "https://github.com/Joshualover/dsh-github-search#readme",
+  "bugs": {
+    "url": "https://github.com/Joshualover/dsh-github-search/issues"
+  }
 }
